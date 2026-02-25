@@ -1,4 +1,4 @@
-# Icompras - Ecomence
+# Icompras - Ecommerce
 
 O Icompras é um sistema desenvolvido com foco em arquitetura de microservices para gerenciamento do processo de faturamento e envio de pedidos dentro de um ecossistema de e-commerce. A aplicação utiliza Apache Kafka para implementar comunicação assíncrona entre os serviços, garantindo desacoplamento, escalabilidade e robustez no processamento de pedidos.
 
@@ -37,7 +37,7 @@ O sistema é composto por múltiplos microservices responsáveis por clientes, p
     * Responsável pela criação de pedidos, processamento de pagamentos, callback financeiro e publicação de eventos no Kafka.
 
 - ms faturamento
-    * Responsável por consumir eventos de pedidos pagos, gerar notas fiscais em PDF, realizar upload no MinIO, recuperar URLs dos arquivos e publicar o status de pedido faturado.
+    * Responsável por consumir eventos de pedidos pagos, gerar notas fiscais em PDF, realizar upload no MinIO, recuperar URLs dos arquivos e publicar o status de pedido FATURADO.
 
 - ms logistica
     * Responsável por consumir eventos de pedidos faturados, gerar código de rastreio e atualizar o status do pedido para ENVIADO.
