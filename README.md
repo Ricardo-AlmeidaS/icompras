@@ -1,43 +1,49 @@
 # Icompras - Ecomence
 
-O Icompras é um sistema desenvolvido com foco em arquitetura de microservices para gerenciamento do processo de faturamento dentro de um ecossistema de e-commerce. A aplicação utiliza comunicação assíncrona entre serviços através do Apache Kafka, garantindo maior escalabilidade, desacoplamento e robustez no processamento de pedidos, pagamentos e faturamento.
+O Icompras é um sistema desenvolvido com foco em arquitetura de microservices para gerenciamento do processo de faturamento e envio de pedidos dentro de um ecossistema de e-commerce. A aplicação utiliza Apache Kafka para implementar comunicação assíncrona entre os serviços, garantindo desacoplamento, escalabilidade e robustez no processamento de pedidos.
 
-Com o Icompras, é possível gerenciar clientes, produtos, pedidos e faturamento, além de automatizar a geração de nota fiscal e atualização de status dos pedidos com base em eventos assíncronos.
+O sistema é composto por múltiplos microservices responsáveis por clientes, produtos, pedidos, faturamento, logística e infraestrutura, automatizando todo o fluxo desde a criação do pedido até o envio ao cliente.
 
 ## Funcionalidades
 
 - Publicação e Consumo de Eventos
-    * Os microservices se comunicam através do Apache Kafka, publicando e consumindo eventos como pagamento aprovado e pedido faturado.
+    * Os microservices se comunicam de forma assíncrona através do Apache Kafka, publicando e consumindo eventos como pagamento aprovado, pedido faturado e pedido enviado.
 
 - Gerenciamento de Status de Pedido
-  * Quando um pagamento é confirmado, o sistema atualiza o status do pedido e publica essa informação em um tópico do Kafka, permitindo que outros microservices reajam à atualização de forma assíncrona.
+  * O sistema atualiza automaticamente o status do pedido com base nos eventos recebidos (pago, faturado e enviado).
 
 - Geração de Nota Fiscal
-  * O microserviço de faturamento consome eventos de pedidos pagos, gera automaticamente a nota fiscal em PDF utilizando JasperReports e vincula ao pedido.
+  * O microserviço de faturamento consome eventos de pedidos pagos, gera automaticamente a nota fiscal em PDF utilizando JasperReports e armazena o arquivo no bucket.
 
 - Upload e Recuperação de Arquivos
-  * As notas fiscais são armazenadas em um bucket (MinIO), permitindo upload seguro e geração de URLs assinadas para acesso ao arquivo.
+  * As notas fiscais são enviadas para o MinIO e podem ser recuperadas através de URLs assinadas.
 
-- Automação do Processo de Faturamento
-  * Todo o fluxo de faturamento é automatizado: pagamento aprovado → geração da nota fiscal → upload no bucket → publicação do evento de pedido faturado.
+- Automação Logística
+  * Após o faturamento do pedido, o microserviço de logística consome o evento, gera um código de rastreio e atualiza o status do pedido para ENVIADO.
 
-- Arquitetura de Microservices
-  * O sistema é dividido em microservices independentes (clientes, produtos, pedidos e faturamento), garantindo escalabilidade, desacoplamento e facilidade de manutenção.
+- Infraestrutura Containerizada
+  * O microserviço de serviço é responsável por subir os containers necessários, incluindo bancos de dados e serviços de infraestrutura utilizando Docker.
 
 
 ## Microservices do Sistema
 
 - ms clientes
-    * Responsável pelo gerenciamento de clientes, incluindo cadastro, consulta e inativação.
+    * Responsável pelo cadastro, consulta e inativação de clientes.
 
 - ms produtos
-    * Responsável pelo gerenciamento de produtos, incluindo cadastro, consulta e controle de disponibilidade.
+    * Responsável pelo cadastro, consulta e inativação de produtos.
 
 - ms pedidos
     * Responsável pela criação de pedidos, processamento de pagamentos, callback financeiro e publicação de eventos no Kafka.
 
 - ms faturamento
-    * Responsável por consumir eventos de pedidos pagos, gerar notas fiscais em PDF, realizar upload no MinIO, recuperar URLs dos arquivos e publicar o status de pedido faturado no Kafka.
+    * Responsável por consumir eventos de pedidos pagos, gerar notas fiscais em PDF, realizar upload no MinIO, recuperar URLs dos arquivos e publicar o status de pedido faturado.
+
+- ms logistica
+    * Responsável por consumir eventos de pedidos faturados, gerar código de rastreio e atualizar o status do pedido para ENVIADO.
+
+- ms servico
+    * Responsável por construir e orquestrar os containers da aplicação, incluindo Kafka, bancos de dados e demais serviços de infraestrutura.
 
 
 ## Pré-requisitos
@@ -71,11 +77,11 @@ Para realizar os testes dos endpoint foi usado [Postman](https://www.postman.com
 
 ### MS Clientes (porta 8082)
 
-| Action            | Endpoint                                | Description                                                     |
-|-------------------|------------------------------------------|-----------------------------------------------------------------|
-| Cadastrar Cliente | http://localhost:8082/clientes           | Realiza o cadastro de um novo cliente no sistema                |
-| Buscar Cliente    | http://localhost:8082/clientes/{codigo}  | Recupera os dados de um cliente pelo código                     |
-| Inativar Cliente  | http://localhost:8082/clientes/{codigo}  | Inativa o cliente, impedindo que ele realize novos pedidos      |
+| Action            | Endpoint                               | Description                                                     |
+|-------------------|----------------------------------------|-----------------------------------------------------------------|
+| Cadastrar Cliente | http://localhost:8082/clientes         | Realiza o cadastro de um novo cliente no sistema                |
+| Buscar Cliente    | http://localhost:8082/clientes/{codigo}| Recupera os dados de um cliente pelo código                     |
+| Inativar Cliente  | http://localhost:8082/clientes/{codigo}| Inativa o cliente, impedindo que ele realize novos pedidos      |
 
 
 ### MS Produtos (porta 8081)
@@ -97,34 +103,44 @@ Para realizar os testes dos endpoint foi usado [Postman](https://www.postman.com
 | Detalhes do Pedido       | http://localhost:8080/pedidos/{codigo}            | Retorna os detalhes completos de um pedido                                  |
 
 
-### MS Faturamento (porta configurável)
+### MS Faturamento
 
-| Action          | Endpoint                         | Description                                                                 |
-|-----------------|----------------------------------|-----------------------------------------------------------------------------|
-| Upload de Arquivo | http://localhost:{porta}/bucket | Realiza o upload de arquivos (ex: nota fiscal PDF) para o bucket MinIO      |
-| Obter URL do Arquivo | http://localhost:{porta}/bucket?filename=nome | Gera uma URL assinada para acesso ao arquivo armazenado no bucket           |
+| Action             | Endpoint                          | Description                                                                 |
+|--------------------|-----------------------------------|-----------------------------------------------------------------------------|
+| Upload de Arquivo  | http://localhost:{porta}/bucket   | Realiza upload da nota fiscal (PDF) para o bucket MinIO                     |
+| Obter URL do Arquivo | http://localhost:{porta}/bucket?filename=nome | Gera uma URL assinada para acesso ao arquivo armazenado                     |
 
 
-## Observação sobre o fluxo de Faturamento
+## Observação sobre o Endpoint de Callback de Pagamentos
 
-O microserviço de faturamento é orientado a eventos e integrado ao Apache Kafka.
+O endpoint de callback de pagamentos desempenha um papel crucial na comunicação entre o sistema e o provedor de pagamentos.
 
-- Consumo de Eventos
-  * O serviço escuta o tópico de pedidos pagos e inicia automaticamente o processo de faturamento ao receber a mensagem.
+- Atualização de Status
+  * Recebe notificações do banco sobre o status do pagamento e atualiza automaticamente o status do pedido.
 
-- Geração de Nota Fiscal
-  * Após consumir o evento, o sistema gera a nota fiscal em PDF utilizando JasperReports com base nos dados do pedido.
+- Automação
+  * Elimina a necessidade de verificação manual de pagamentos, tornando o processo mais rápido e eficiente.
 
-- Armazenamento no Bucket (MinIO)
-  * A nota fiscal é enviada para um bucket de armazenamento e uma URL assinada é gerada para acesso seguro ao arquivo.
+- Gerenciamento de Falhas
+  * Em caso de falha no pagamento, o sistema pode notificar o cliente para tentar novamente, melhorando a experiência do usuário.
 
-- Publicação do Pedido Faturado
-  * Após gerar a nota fiscal, o serviço publica um novo evento no Kafka informando que o pedido foi faturado, incluindo a URL da nota fiscal.
+
+## Fluxo Assíncrono do Sistema (Kafka)
+
+1. O pedido é criado no ms-pedidos  
+2. O pagamento é confirmado via callback  
+3. Um evento de pedido pago é publicado no Kafka  
+4. O ms-faturamento consome o evento e gera a nota fiscal  
+5. A nota fiscal é armazenada no MinIO e a URL é gerada  
+6. Um evento de pedido faturado é publicado no Kafka  
+7. O ms-logistica consome o evento de faturamento  
+8. O sistema gera um código de rastreio e atualiza o pedido para ENVIADO  
 
 
 ## Configuração do Banco de Dados
 
-O projeto utiliza o PostgreSQL como banco de dados principal para persistência das informações dos microservices. O microserviço de faturamento utiliza armazenamento em bucket (MinIO) para arquivos de nota fiscal.
+O projeto utiliza PostgreSQL como banco de dados principal para persistência dos dados dos microservices.  
+O armazenamento de arquivos (notas fiscais) é realizado através do MinIO utilizando buckets.
 
 
 ## License
